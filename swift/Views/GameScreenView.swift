@@ -41,7 +41,10 @@ struct GameScreenView: View {
                 }
             }
         }
-        .onChange(of: fullScreen) { _, newValue in
+        // ================================================================
+        // ✅ التعديل: إزالة المعامل الأول (_) من onChange ليتوافق مع iOS 16
+        // ================================================================
+        .onChange(of: fullScreen) { newValue in
             iPSX2Bridge.setFullScreen(newValue)
         }
     }
