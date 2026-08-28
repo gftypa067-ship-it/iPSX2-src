@@ -1030,12 +1030,13 @@ INISettingsInterface* g_p44_settings_interface = nullptr;
         // No rootVC background change — SwiftUI handles menu bg
     }];
 
-    [[NSNotificationCenter defaultCenter] addObserverForName:@"iPSX2ReturnToMenu"
-                                                      object:nil
-                                                       queue:nil
-                                                  usingBlock:^(NSNotification * _Nonnull note) {
-        // No rootVC background change — SwiftUI handles menu bg
-    }];
+    // ✅ تم إزالة المستمع للإشعار iPSX2ReturnToMenu لأنه يسبب حلقة لا نهائية
+    // [[NSNotificationCenter defaultCenter] addObserverForName:@"iPSX2ReturnToMenu"
+    //                                                   object:nil
+    //                                                    queue:nil
+    //                                               usingBlock:^(NSNotification * _Nonnull note) {
+    //     // No rootVC background change — SwiftUI handles menu bg
+    // }];
 
     [[NSNotificationCenter defaultCenter] addObserverForName:@"iPSX2EnterGameScreen"
                                                       object:nil
