@@ -21,7 +21,10 @@ struct RootView: View {
             }
         }
         .onAppear { applyTheme(colorSchemeRaw) }
-        .onChange(of: colorSchemeRaw) { _, newValue in applyTheme(newValue) }
+        // ============================================================
+        // التعديل: إزالة المعامل الأول (_) من onChange ليتوافق مع iOS 16
+        // ============================================================
+        .onChange(of: colorSchemeRaw) { newValue in applyTheme(newValue) }
         .onOpenURL { url in
             fileImporter.handleURL(url)
         }
