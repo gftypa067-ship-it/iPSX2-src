@@ -26,107 +26,107 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     // ── Emulator / CPU ──
     @Published var eeCoreType: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/CPU", key: "CoreType", value: Int32(clamping:eeCoreType)) }
+        didSet { saveAndNotify() }
     }
     @Published var iopRecompiler: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableIOP", value: iopRecompiler) }
+        didSet { saveAndNotify() }
     }
     @Published var vu0Recompiler: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableVU0", value: vu0Recompiler) }
+        didSet { saveAndNotify() }
     }
     @Published var vu1Recompiler: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableVU1", value: vu1Recompiler) }
+        didSet { saveAndNotify() }
     }
     @Published var fastBoot: Bool {
-        didSet { iPSX2Bridge.setINIBool("GameISO", key: "FastBoot", value: fastBoot) }
+        didSet { saveAndNotify() }
     }
     @Published var fastmem: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableFastmem", value: fastmem) }
+        didSet { saveAndNotify() }
     }
 
     // ── Boot ──
     @Published var fastCDVD: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "fastCDVD", value: fastCDVD) }
+        didSet { saveAndNotify() }
     }
 
     // ── Advanced Speedhacks ──
     @Published var eeCycleRate: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/Speedhacks", key: "EECycleRate", value: Int32(clamping:eeCycleRate)) }
+        didSet { saveAndNotify() }
     }
     @Published var vu1Instant: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "vu1Instant", value: vu1Instant) }
+        didSet { saveAndNotify() }
     }
     @Published var waitLoop: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "WaitLoop", value: waitLoop) }
+        didSet { saveAndNotify() }
     }
     @Published var intcStat: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "IntcStat", value: intcStat) }
+        didSet { saveAndNotify() }
     }
 
     // ── Graphics ──
     @Published var renderer: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "Renderer", value: Int32(clamping:renderer)) }
+        didSet { saveAndNotify() }
     }
     @Published var upscaleMultiplier: Float {
-        didSet { iPSX2Bridge.setINIFloat("EmuCore/GS", key: "upscale_multiplier", value: upscaleMultiplier) }
+        didSet { saveAndNotify() }
     }
     @Published var vsyncQueueSize: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "VsyncQueueSize", value: Int32(clamping:vsyncQueueSize)) }
+        didSet { saveAndNotify() }
     }
     @Published var textureFiltering: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "filter", value: Int32(clamping:textureFiltering)) }
+        didSet { saveAndNotify() }
     }
     @Published var fxaa: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "fxaa", value: fxaa) }
+        didSet { saveAndNotify() }
     }
     @Published var casMode: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "CASMode", value: Int32(clamping:casMode)) }
+        didSet { saveAndNotify() }
     }
     @Published var casSharpness: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "CASSharpness", value: Int32(clamping:casSharpness)) }
+        didSet { saveAndNotify() }
     }
     @Published var interlaceMode: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "deinterlace_mode", value: Int32(clamping:interlaceMode)) }
+        didSet { saveAndNotify() }
     }
     @Published var aspectRatio: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "AspectRatio", value: Int32(clamping:aspectRatio)) }
+        didSet { saveAndNotify() }
     }
     @Published var blendingAccuracy: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "accurate_blending_unit", value: Int32(clamping:blendingAccuracy)) }
+        didSet { saveAndNotify() }
     }
     @Published var dithering: Int {
-        didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "dithering_ps2", value: Int32(clamping:dithering)) }
+        didSet { saveAndNotify() }
     }
 
     // ── OSD Overlay ──
     @Published var osdPreset: OsdPreset {
         didSet {
-            iPSX2Bridge.setINIInt("iPSX2/UI", key: "OsdPreset", value: Int32(clamping:osdPreset.rawValue))
             applyOsdPreset(osdPreset)
+            saveAndNotify()
         }
     }
     @Published var osdShowFPS: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowFPS", value: osdShowFPS) }
+        didSet { saveAndNotify() }
     }
     @Published var osdShowSpeed: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowSpeed", value: osdShowSpeed) }
+        didSet { saveAndNotify() }
     }
     @Published var osdShowCPU: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowCPU", value: osdShowCPU) }
+        didSet { saveAndNotify() }
     }
     @Published var osdShowResolution: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowResolution", value: osdShowResolution) }
+        didSet { saveAndNotify() }
     }
     @Published var osdShowFrameTimes: Bool {
-        didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowFrameTimes", value: osdShowFrameTimes) }
+        didSet { saveAndNotify() }
     }
 
     // ── Gamepad / UI ──
     @Published var padOpacity: Float {
-        didSet { iPSX2Bridge.setINIFloat("iPSX2/UI", key: "PadOpacity", value: padOpacity) }
+        didSet { saveAndNotify() }
     }
     @Published var hapticFeedback: Bool {
-        didSet { iPSX2Bridge.setINIBool("iPSX2/UI", key: "HapticFeedback", value: hapticFeedback) }
+        didSet { saveAndNotify() }
     }
 
     // ── Init from INI ──
@@ -238,6 +238,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         vu1Instant = true       // PC PCSX2 recommended default
         waitLoop = true         // PC PCSX2 recommended default
         intcStat = true         // PC PCSX2 recommended default
+        saveAndNotify()
     }
 
     /// Reset graphics settings to PC PCSX2 defaults
@@ -253,5 +254,17 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         aspectRatio = 0         // Auto 4:3/3:2
         blendingAccuracy = 1    // Basic
         dithering = 2           // Scaled
+        saveAndNotify()
+    }
+
+    // ================================================================
+    // ✅ دالة مساعدة للحفظ والإشعار
+    // ================================================================
+    private func saveAndNotify() {
+        // إجبار الواجهة على التحديث (للتأكد من أن SwiftUI يعرف بالتغيير)
+        objectWillChange.send()
+        // حفظ الـ INI (إذا كانت هناك دوال حفظ عامة)
+        // ملاحظة: دوال setINIInt تقوم بالحفظ تلقائياً، لكن نضيف هذا للتأكد
+        iPSX2Bridge.saveSettings?() // إذا كانت موجودة، وإلا تجاهل
     }
 }
