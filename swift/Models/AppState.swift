@@ -31,7 +31,7 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 self?.pendingBootAction = nil
                 action()
             } else {
-                // No pending reboot — return to menu (VM crash / normal shutdown)
+                // ✅ العودة إلى القائمة بعد إيقاف VM
                 self?.currentScreen = .menu
             }
         }
@@ -59,13 +59,18 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentScreen = .playing
     }
 
-    // ================================================================
-    // ✅ التعديل: تحديث الحالة مباشرة بدلاً من الاعتماد على الإشعار فقط
-    // ================================================================
+    // ✅ إصلاح شامل لدالة العودة إلى القائمة
     func returnToMenu() {
+        // 1. تغيير الحالة فوراً
         currentScreen = .menu
         runningGameName = nil
-        // إشعار لـ ObjC side (اختياري، للحفاظ على التوافق)
+        
+        // 2. إذا كان VM يعمل، أطلب إيقافه
+        if iPSX2Bridge.isVMRunning() {
+            iPSX2Bridge.requestVMShutdown()
+        }
+        
+        // 3. إشعار لـ ObjC side (اختياري)
         NotificationCenter.default.post(name: NSNotification.Name("iPSX2ReturnToMenu"), object: nil)
     }
 
