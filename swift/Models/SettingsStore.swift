@@ -38,8 +38,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
     }
     @Published var fastBoot: Bool {
         didSet {
-            // ✅ تحديث EmuConfig لضمان تطبيق الإعداد فوراً
-            EmuConfig.GS.FastBoot = fastBoot
+            // ✅ كتابة القيمة في INI فقط (بدون EmuConfig)
             iPSX2Bridge.setINIBool("GameISO", key: "FastBoot", value: fastBoot)
             saveAndNotify()
         }
@@ -168,9 +167,6 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         hapticFeedback = iPSX2Bridge.getINIBool("iPSX2/UI", key: "HapticFeedback", defaultValue: true)
         iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "vuThread", value: false)
         iPSX2Bridge.applyOsdPreset(Int32(clamping:osdPreset.rawValue))
-        
-        // ✅ مزامنة EmuConfig مع القيم المقروءة
-        EmuConfig.GS.FastBoot = fastBoot
     }
 
     /// Reload ALL settings from INI (call on VM start/stop)
@@ -205,9 +201,6 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         osdShowFrameTimes = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowFrameTimes", defaultValue: false)
         padOpacity = iPSX2Bridge.getINIFloat("iPSX2/UI", key: "PadOpacity", defaultValue: 0.6)
         hapticFeedback = iPSX2Bridge.getINIBool("iPSX2/UI", key: "HapticFeedback", defaultValue: true)
-        
-        // ✅ مزامنة EmuConfig بعد إعادة التحميل
-        EmuConfig.GS.FastBoot = fastBoot
     }
 
     private func applyOsdPreset(_ preset: OsdPreset) {
