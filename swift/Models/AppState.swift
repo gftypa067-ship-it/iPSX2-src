@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 import SwiftUI
+import Combine
 
-@Observable
-final class AppState: @unchecked Sendable {
+final class AppState: ObservableObject, @unchecked Sendable {
     static let shared = AppState()
 
     enum Screen {
@@ -12,15 +12,15 @@ final class AppState: @unchecked Sendable {
         case playing
     }
 
-    var currentScreen: Screen = .menu
-    var selectedTab: Int = 0
-    var runningGameName: String? = nil
-    var hideStatusBar: Bool = false
+    @Published var currentScreen: Screen = .menu
+    @Published var selectedTab: Int = 0
+    @Published var runningGameName: String? = nil
+    @Published var hideStatusBar: Bool = false
 
-    @ObservationIgnored private var pendingBootAction: (() -> Void)?
-    @ObservationIgnored private var shutdownObserver: NSObjectProtocol?
+    private var pendingBootAction: (() -> Void)?
+    private var shutdownObserver: NSObjectProtocol?
 
-    @ObservationIgnored private var autoBootObserver: NSObjectProtocol?
+    private var autoBootObserver: NSObjectProtocol?
 
     private init() {
         shutdownObserver = NotificationCenter.default.addObserver(
