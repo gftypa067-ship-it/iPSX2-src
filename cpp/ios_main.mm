@@ -1,4 +1,3 @@
-
 // Set SDL_MAIN_HANDLED to prevent SDL from redefining main()
 #define SDL_MAIN_HANDLED
 
@@ -224,6 +223,9 @@ extern "C" bool VMController_IsStopRequested() {
                         g_p44_settings_interface->Save();
                     }
                 }
+                // ✅ طباعة قيمة fastBoot للتأكد
+                Console.WriteLn("@@FAST_BOOT@@ value=%d", fastBoot ? 1 : 0);
+
                 std::string isoPath = isoDir + "/" + isoFilename;
                 // Fallback: check Documents/ root if not found in iso/
                 if (!isoFilename.empty() && !FileSystem::FileExists(isoPath.c_str())) {
