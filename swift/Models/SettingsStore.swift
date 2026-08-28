@@ -227,44 +227,43 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     /// Reset emulator settings to PC PCSX2 defaults
     func resetEmulatorDefaults() {
-        eeCoreType = 0          // JIT
+        eeCoreType = 0
         iopRecompiler = true
-        vu0Recompiler = true    // PC PCSX2 default: microVU JIT
-        vu1Recompiler = true    // PC PCSX2 default: microVU JIT
+        vu0Recompiler = true
+        vu1Recompiler = true
         fastBoot = false
         fastmem = true
         fastCDVD = false
         eeCycleRate = 0
-        vu1Instant = true       // PC PCSX2 recommended default
-        waitLoop = true         // PC PCSX2 recommended default
-        intcStat = true         // PC PCSX2 recommended default
+        vu1Instant = true
+        waitLoop = true
+        intcStat = true
         saveAndNotify()
     }
 
     /// Reset graphics settings to PC PCSX2 defaults
     func resetGraphicsDefaults() {
-        renderer = 17           // Metal
-        upscaleMultiplier = 1.0 // Native PS2
+        renderer = 17
+        upscaleMultiplier = 1.0
         vsyncQueueSize = 8
-        textureFiltering = 2    // Bilinear (PS2)
+        textureFiltering = 2
         fxaa = false
-        casMode = 0             // Disabled
+        casMode = 0
         casSharpness = 50
-        interlaceMode = 7       // Adaptive
-        aspectRatio = 0         // Auto 4:3/3:2
-        blendingAccuracy = 1    // Basic
-        dithering = 2           // Scaled
+        interlaceMode = 7
+        aspectRatio = 0
+        blendingAccuracy = 1
+        dithering = 2
         saveAndNotify()
     }
 
     // ================================================================
-    // ✅ دالة مساعدة للحفظ والإشعار
+    // ✅ دالة مساعدة للحفظ والإشعار (بدون saveSettings)
     // ================================================================
     private func saveAndNotify() {
         // إجبار الواجهة على التحديث (للتأكد من أن SwiftUI يعرف بالتغيير)
         objectWillChange.send()
-        // حفظ الـ INI (إذا كانت هناك دوال حفظ عامة)
-        // ملاحظة: دوال setINIInt تقوم بالحفظ تلقائياً، لكن نضيف هذا للتأكد
-        iPSX2Bridge.saveSettings?() // إذا كانت موجودة، وإلا تجاهل
+        // ملاحظة: دوال setINIInt وغيرها تقوم بالحفظ تلقائياً (تستدعي Save())
+        // لذا لا حاجة لدالة saveSettings إضافية
     }
 }
