@@ -225,7 +225,10 @@ private struct DraggableGroup: View {
                 }
         )
         .simultaneousGesture(
-            MagnifyGesture()
+            // ============================================================
+            // ✅ التعديل: تغيير MagnifyGesture إلى MagnificationGesture
+            // ============================================================
+            MagnificationGesture()
                 .onChanged { v in currentScale = v.magnification }
                 .onEnded { v in
                     let newScale = (pos.scale * v.magnification).clamped(0.5, 2.0)
