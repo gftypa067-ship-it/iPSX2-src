@@ -226,12 +226,13 @@ private struct DraggableGroup: View {
         )
         .simultaneousGesture(
             // ============================================================
-            // ✅ التعديل: تغيير MagnifyGesture إلى MagnificationGesture
+            // ✅ التعديل: MagnificationGesture (iOS 13+) بدلاً من MagnifyGesture (iOS 17+)
+            // ✅ التعديل: v هو CGFloat مباشرة، وليس v.magnification
             // ============================================================
             MagnificationGesture()
-                .onChanged { v in currentScale = v.magnification }
+                .onChanged { v in currentScale = v }
                 .onEnded { v in
-                    let newScale = (pos.scale * v.magnification).clamped(0.5, 2.0)
+                    let newScale = (pos.scale * v).clamped(0.5, 2.0)
                     updateScale(newScale)
                     currentScale = 1.0
                 }
