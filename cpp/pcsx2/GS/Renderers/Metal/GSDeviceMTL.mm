@@ -29,26 +29,55 @@ GSDevice* MakeGSDeviceMTL()
 	return new GSDeviceMTL();
 }
 
+// ================================================================
+// ✅ إصلاح GetMetalAdapterList: استخدام MTLCreateSystemDefaultDevice
+// ================================================================
 std::vector<GSAdapterInfo> GetMetalAdapterList()
 { @autoreleasepool {
 	std::vector<GSAdapterInfo> list;
-	auto devs = MRCTransfer(MTLCopyAllDevices());
-	for (id<MTLDevice> dev in devs.Get())
+	
+	// iOS 16+ uses MTLCreateSystemDefaultDevice
+	id<MTLDevice> defaultDevice = MTLCreateSystemDefaultDevice();
+	if (defaultDevice)
 	{
 		GSAdapterInfo ai;
-		ai.name = [[dev name] UTF8String];
+		ai.name = [[defaultDevice name] UTF8String];
 		
 		ai.max_texture_size = 8192;
 		#if !TARGET_OS_IPHONE
-		if ([dev supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily1_v1])
+		if ([defaultDevice supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily1_v1])
 			ai.max_texture_size = 16384;
 #endif
 		if (@available(macOS 10.15, iOS 13.0, *))
-			if ([dev supportsFamily:MTLGPUFamilyApple3])
+			if ([defaultDevice supportsFamily:MTLGPUFamilyApple3])
 				ai.max_texture_size = 16384;
 
 		ai.max_upscale_multiplier = GSGetMaxUpscaleMultiplier(ai.max_texture_size);
 		list.push_back(std::move(ai));
+	}
+	else
+	{
+		// Fallback: try MTLCopyAllDevices (for macOS only, but safe)
+		// Note: This is only reached if MTLCreateSystemDefaultDevice fails (unlikely)
+		Console.Error("Metal: MTLCreateSystemDefaultDevice failed, falling back to MTLCopyAllDevices (macOS only)");
+		NSArray<id<MTLDevice>>* allDevices = MTLCopyAllDevices();
+		for (id<MTLDevice> dev in allDevices)
+		{
+			GSAdapterInfo ai;
+			ai.name = [[dev name] UTF8String];
+			
+			ai.max_texture_size = 8192;
+			#if !TARGET_OS_IPHONE
+			if ([dev supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily1_v1])
+				ai.max_texture_size = 16384;
+#endif
+			if (@available(macOS 10.15, iOS 13.0, *))
+				if ([dev supportsFamily:MTLGPUFamilyApple3])
+					ai.max_texture_size = 16384;
+
+			ai.max_upscale_multiplier = GSGetMaxUpscaleMultiplier(ai.max_texture_size);
+			list.push_back(std::move(ai));
+		}
 	}
 	return list;
 }}
@@ -870,6 +899,9 @@ static MRCOwned<id<MTLSamplerState>> CreateSampler(id<MTLDevice> dev, GSHWDrawCo
 	return ret;
 }
 
+// ================================================================
+// ✅ إصلاح GSDeviceMTL::Create: استخدام MTLCreateSystemDefaultDevice
+// ================================================================
 bool GSDeviceMTL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 { @autoreleasepool {
 	if (!GSDevice::Create(vsync_mode, allow_present_throttle)) {
@@ -878,23 +910,50 @@ bool GSDeviceMTL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 	}
 
 	NSString* ns_adapter_name = [NSString stringWithUTF8String:GSConfig.Adapter.c_str()];
-	auto devs = MRCTransfer(MTLCopyAllDevices());
-	for (id<MTLDevice> dev in devs.Get())
+	
+	// iOS 16+ primary method: MTLCreateSystemDefaultDevice
+	id<MTLDevice> defaultDevice = MTLCreateSystemDefaultDevice();
+	
+	if (ns_adapter_name && [ns_adapter_name length] > 0)
 	{
-		if ([[dev name] isEqualToString:ns_adapter_name])
-			m_dev = GSMTLDevice(MRCRetain(dev));
-	}
-	if (!m_dev.dev)
-	{
-		if (GSConfig.Adapter == GetDefaultAdapter())
-			Console.WriteLn("Metal: Using default adapter");
-		else if (!GSConfig.Adapter.empty())
-			Console.Warning("Metal: Couldn't find adapter %s, using default", GSConfig.Adapter.c_str());
-		m_dev = GSMTLDevice(MRCTransfer(MTLCreateSystemDefaultDevice()));
-		if (!m_dev.dev) {
-			Console.WriteLn("GSDeviceMTL::Create: No Metal Devices Available");
-			Host::ReportErrorAsync(TRANSLATE_SV("GSDeviceMTL", "No Metal Devices Available"), TRANSLATE_SV("GSDeviceMTL", "No Metal-supporting GPUs were found.  PCSX2 requires a Metal GPU (available on all Macs from 2012 onwards)."));
+		// If a specific adapter is requested, find it
+		if (defaultDevice && [[defaultDevice name] isEqualToString:ns_adapter_name])
+		{
+			m_dev = GSMTLDevice(MRCRetain(defaultDevice));
 		}
+		else
+		{
+			// Fallback: search all devices (macOS only)
+			NSArray<id<MTLDevice>>* allDevices = MTLCopyAllDevices();
+			for (id<MTLDevice> dev in allDevices)
+			{
+				if ([[dev name] isEqualToString:ns_adapter_name])
+				{
+					m_dev = GSMTLDevice(MRCRetain(dev));
+					break;
+				}
+			}
+			if (!m_dev.dev)
+			{
+				Console.Warning("Metal: Couldn't find adapter %s, using default", GSConfig.Adapter.c_str());
+				m_dev = GSMTLDevice(MRCRetain(defaultDevice ? defaultDevice : MTLCreateSystemDefaultDevice()));
+			}
+		}
+	}
+	else
+	{
+		// Use default device
+		if (!defaultDevice)
+		{
+			Console.Error("Metal: MTLCreateSystemDefaultDevice failed. This device may not support Metal.");
+		}
+		m_dev = GSMTLDevice(MRCRetain(defaultDevice ? defaultDevice : MTLCreateSystemDefaultDevice()));
+	}
+	
+	if (!m_dev.dev) {
+		Console.WriteLn("GSDeviceMTL::Create: No Metal Devices Available");
+		Host::ReportErrorAsync(TRANSLATE_SV("GSDeviceMTL", "No Metal Devices Available"), TRANSLATE_SV("GSDeviceMTL", "No Metal-supporting GPUs were found.  PCSX2 requires a Metal GPU (available on all Macs from 2012 onwards)."));
+		return false;
 	}
 
 	m_name = [[m_dev.dev name] UTF8String];
@@ -2469,204 +2528,4 @@ void GSDeviceMTL::SendHWDraw(GSHWDrawConfig& config, id<MTLRenderCommandEncoder>
 
 		for (u32 n = 0, p = 0; n < draw_list_size; n++)
 		{
-			const u32 count = (*config.drawlist)[n] * indices_per_prim;
-			textureBarrier(enc);
-			[enc drawIndexedPrimitives:topology
-			                indexCount:count
-			                 indexType:MTLIndexTypeUInt16
-			               indexBuffer:buffer
-			         indexBufferOffset:off + p * sizeof(*config.indices)];
-			p += count;
-		}
-
-		[enc popDebugGroup];
-		return;
-	}
-	else if (one_barrier)
-	{
-		// One barrier needed
-		textureBarrier(enc);
-		g_perfmon.Put(GSPerfMon::Barriers, 1);
-	}
-
-	[enc drawIndexedPrimitives:topology
-	                indexCount:config.nindices
-	                 indexType:MTLIndexTypeUInt16
-	               indexBuffer:buffer
-	         indexBufferOffset:off];
-
-	g_perfmon.Put(GSPerfMon::DrawCalls, 1);
-}
-
-// tbh I'm not a fan of the current debug groups
-// not much useful information and makes things harder to find
-// good to turn on if you're debugging tc stuff though
-#ifndef MTL_ENABLE_DEBUG
-	#define MTL_ENABLE_DEBUG 0
-#endif
-
-void GSDeviceMTL::PushDebugGroup(const char* fmt, ...)
-{
-#if MTL_ENABLE_DEBUG
-	va_list va;
-	va_start(va, fmt);
-	MRCOwned<NSString*> nsfmt = MRCTransfer([[NSString alloc] initWithUTF8String:fmt]);
-	m_debug_entries.emplace_back(DebugEntry::Push, MRCTransfer([[NSString alloc] initWithFormat:nsfmt arguments:va]));
-	va_end(va);
-#endif
-}
-
-void GSDeviceMTL::PopDebugGroup()
-{
-#if MTL_ENABLE_DEBUG
-	m_debug_entries.emplace_back(DebugEntry::Pop, nullptr);
-#endif
-}
-
-void GSDeviceMTL::InsertDebugMessage(DebugMessageCategory category, const char* fmt, ...)
-{
-#if MTL_ENABLE_DEBUG
-	va_list va;
-	va_start(va, fmt);
-	MRCOwned<NSString*> nsfmt = MRCTransfer([[NSString alloc] initWithUTF8String:fmt]);
-	m_debug_entries.emplace_back(DebugEntry::Insert, MRCTransfer([[NSString alloc] initWithFormat:nsfmt arguments:va]));
-	va_end(va);
-#endif
-}
-
-void GSDeviceMTL::ProcessDebugEntry(id<MTLCommandEncoder> enc, const DebugEntry& entry)
-{
-	switch (entry.op)
-	{
-		case DebugEntry::Push:
-			[enc pushDebugGroup:entry.str];
-			m_debug_group_level++;
-			break;
-		case DebugEntry::Pop:
-			[enc popDebugGroup];
-			if (m_debug_group_level > 0)
-				m_debug_group_level--;
-			break;
-		case DebugEntry::Insert:
-			[enc insertDebugSignpost:entry.str];
-			break;
-	}
-}
-
-void GSDeviceMTL::FlushDebugEntries(id<MTLCommandEncoder> enc)
-{
-#if MTL_ENABLE_DEBUG
-	if (!m_debug_entries.empty())
-	{
-		for (const DebugEntry& entry : m_debug_entries)
-		{
-			ProcessDebugEntry(enc, entry);
-		}
-		m_debug_entries.clear();
-	}
-#endif
-}
-
-void GSDeviceMTL::EndDebugGroup(id<MTLCommandEncoder> enc)
-{
-#if MTL_ENABLE_DEBUG
-	if (!m_debug_entries.empty() && m_debug_group_level)
-	{
-		auto begin = m_debug_entries.begin();
-		auto cur = begin;
-		auto end = m_debug_entries.end();
-		while (cur != end && m_debug_group_level)
-		{
-			ProcessDebugEntry(enc, *cur);
-			cur++;
-		}
-		m_debug_entries.erase(begin, cur);
-	}
-#endif
-}
-
-static simd::float2 ToSimd(const ImVec2& vec)
-{
-	return simd::make_float2(vec.x, vec.y);
-}
-
-static simd::float4 ToSimd(const ImVec4& vec)
-{
-	return simd::make_float4(vec.x, vec.y, vec.z, vec.w);
-}
-
-void GSDeviceMTL::RenderImGui(ImDrawData* data)
-{
-	if (data->CmdListsCount == 0)
-		return;
-	simd::float4 transform;
-	transform.xy = 2.f / simd::make_float2(data->DisplaySize.x, -data->DisplaySize.y);
-	transform.zw = ToSimd(data->DisplayPos) * -transform.xy + simd::make_float2(-1, 1);
-	id<MTLRenderCommandEncoder> enc = m_current_render.encoder;
-	[enc pushDebugGroup:@"ImGui"];
-
-	Map map = Allocate(m_vertex_upload_buf, data->TotalVtxCount * sizeof(ImDrawVert) + data->TotalIdxCount * sizeof(ImDrawIdx));
-	size_t vtx_off = 0;
-	size_t idx_off = data->TotalVtxCount * sizeof(ImDrawVert);
-
-	[enc setRenderPipelineState:m_imgui_pipeline];
-	[enc setVertexBuffer:map.gpu_buffer offset:map.gpu_offset atIndex:GSMTLBufferIndexVertices];
-	[enc setVertexBytes:&transform length:sizeof(transform) atIndex:GSMTLBufferIndexUniforms];
-
-	simd::uint4 last_scissor = simd::make_uint4(0, 0, GetWindowWidth(), GetWindowHeight());
-	simd::float2 fb_size = simd_float(last_scissor.zw);
-	simd::float2 clip_off   = ToSimd(data->DisplayPos);       // (0,0) unless using multi-viewports
-	simd::float2 clip_scale = ToSimd(data->FramebufferScale); // (1,1) unless using retina display which are often (2,2)
-	ImTextureID last_tex = reinterpret_cast<ImTextureID>(nullptr);
-
-	for (int i = 0; i < data->CmdListsCount; i++)
-	{
-		const ImDrawList* cmd_list = data->CmdLists[i];
-		size_t vtx_size = cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
-		size_t idx_size = cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
-		memcpy(static_cast<char*>(map.cpu_buffer) + vtx_off, cmd_list->VtxBuffer.Data, vtx_size);
-		memcpy(static_cast<char*>(map.cpu_buffer) + idx_off, cmd_list->IdxBuffer.Data, idx_size);
-
-		for (const ImDrawCmd& cmd : cmd_list->CmdBuffer)
-		{
-			if (cmd.UserCallback)
-				[NSException raise:@"Unimplemented" format:@"UserCallback not implemented"];
-			if (!cmd.ElemCount)
-				continue;
-
-			simd::float4 clip_rect = (ToSimd(cmd.ClipRect) - clip_off.xyxy) * clip_scale.xyxy;
-			simd::float2 clip_min = clip_rect.xy;
-			simd::float2 clip_max = clip_rect.zw;
-			clip_min = simd::max(clip_min, simd::float2(0));
-			clip_max = simd::min(clip_max, fb_size);
-			if (simd::any(clip_min >= clip_max))
-				continue;
-			simd::uint4 scissor = simd::make_uint4(simd_uint(clip_min), simd_uint(clip_max - clip_min));
-			ImTextureID tex = cmd.GetTexID();
-			if (simd::any(scissor != last_scissor))
-			{
-				last_scissor = scissor;
-				[enc setScissorRect:(MTLScissorRect){ .x = scissor.x, .y = scissor.y, .width = scissor.z, .height = scissor.w }];
-			}
-			if (tex != last_tex)
-			{
-				last_tex = tex;
-				[enc setFragmentTexture:(__bridge id<MTLTexture>)tex atIndex:0];
-			}
-
-			[enc setVertexBufferOffset:map.gpu_offset + vtx_off + cmd.VtxOffset * sizeof(ImDrawVert) atIndex:0];
-			[enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle
-			                indexCount:cmd.ElemCount
-			                 indexType:sizeof(ImDrawIdx) == 2 ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32
-			               indexBuffer:map.gpu_buffer
-			         indexBufferOffset:map.gpu_offset + idx_off + cmd.IdxOffset * sizeof(ImDrawIdx)];
-		}
-
-		vtx_off += vtx_size;
-		idx_off += idx_size;
-	}
-
-	[enc popDebugGroup];
-}
-
-#endif // __APPLE__
+			const
