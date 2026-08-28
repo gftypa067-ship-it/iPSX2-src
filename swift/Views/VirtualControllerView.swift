@@ -19,8 +19,9 @@ enum HapticManager {
 }
 
 struct VirtualControllerView: View {
-    @State private var settings = SettingsStore.shared
-    @State private var layout = PadLayoutStore.shared
+    // ✅ التعديل: استخدام StateObject بدلاً من State لتحديث الواجهة عند تغيير الإعدادات
+    @StateObject private var settings = SettingsStore.shared
+    @StateObject private var layout = PadLayoutStore.shared
     var isLandscape: Bool = false
 
     // A004: Scale buttons based on screen width (baseline: iPhone 15 = 393pt width)
