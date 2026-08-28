@@ -3,13 +3,13 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import Combine
 
-@Observable
-final class FileImportHandler: @unchecked Sendable {
+final class FileImportHandler: ObservableObject, @unchecked Sendable {
     static let shared = FileImportHandler()
 
-    var lastImportMessage: String?
-    var showImportAlert = false
+    @Published var lastImportMessage: String?
+    @Published var showImportAlert = false
 
     private static let biosExtensions: Set<String> = ["bin", "rom"]
     private static let gameExtensions: Set<String> = ["iso", "chd", "img"]
