@@ -2528,4 +2528,204 @@ void GSDeviceMTL::SendHWDraw(GSHWDrawConfig& config, id<MTLRenderCommandEncoder>
 
 		for (u32 n = 0, p = 0; n < draw_list_size; n++)
 		{
-			const
+			const u32 count = (*config.drawlist)[n] * indices_per_prim;
+			textureBarrier(enc);
+			[enc drawIndexedPrimitives:topology
+			                indexCount:count
+			                 indexType:MTLIndexTypeUInt16
+			               indexBuffer:buffer
+			         indexBufferOffset:off + p * sizeof(*config.indices)];
+			p += count;
+		}
+
+		[enc popDebugGroup];
+		return;
+	}
+	else if (one_barrier)
+	{
+		// One barrier needed
+		textureBarrier(enc);
+		g_perfmon.Put(GSPerfMon::Barriers, 1);
+	}
+
+	[enc drawIndexedPrimitives:topology
+	                indexCount:config.nindices
+	                 indexType:MTLIndexTypeUInt16
+	               indexBuffer:buffer
+	         indexBufferOffset:off];
+
+	g_perfmon.Put(GSPerfMon::DrawCalls, 1);
+}
+
+// tbh I'm not a fan of the current debug groups
+// not much useful information and makes things harder to find
+// good to turn on if you're debugging tc stuff though
+#ifndef MTL_ENABLE_DEBUG
+	#define MTL_ENABLE_DEBUG 0
+#endif
+
+void GSDeviceMTL::PushDebugGroup(const char* fmt, ...)
+{
+#if MTL_ENABLE_DEBUG
+	va_list va;
+	va_start(va, fmt);
+	MRCOwned<NSString*> nsfmt = MRCTransfer([[NSString alloc] initWithUTF8String:fmt]);
+	m_debug_entries.emplace_back(DebugEntry::Push, MRCTransfer([[NSString alloc] initWithFormat:nsfmt arguments:va]));
+	va_end(va);
+#endif
+}
+
+void GSDeviceMTL::PopDebugGroup()
+{
+#if MTL_ENABLE_DEBUG
+	m_debug_entries.emplace_back(DebugEntry::Pop, nullptr);
+#endif
+}
+
+void GSDeviceMTL::InsertDebugMessage(DebugMessageCategory category, const char* fmt, ...)
+{
+#if MTL_ENABLE_DEBUG
+	va_list va;
+	va_start(va, fmt);
+	MRCOwned<NSString*> nsfmt = MRCTransfer([[NSString alloc] initWithUTF8String:fmt]);
+	m_debug_entries.emplace_back(DebugEntry::Insert, MRCTransfer([[NSString alloc] initWithFormat:nsfmt arguments:va]));
+	va_end(va);
+#endif
+}
+
+void GSDeviceMTL::ProcessDebugEntry(id<MTLCommandEncoder> enc, const DebugEntry& entry)
+{
+	switch (entry.op)
+	{
+		case DebugEntry::Push:
+			[enc pushDebugGroup:entry.str];
+			m_debug_group_level++;
+			break;
+		case DebugEntry::Pop:
+			[enc popDebugGroup];
+			if (m_debug_group_level > 0)
+				m_debug_group_level--;
+			break;
+		case DebugEntry::Insert:
+			[enc insertDebugSignpost:entry.str];
+			break;
+	}
+}
+
+void GSDeviceMTL::FlushDebugEntries(id<MTLCommandEncoder> enc)
+{
+#if MTL_ENABLE_DEBUG
+	if (!m_debug_entries.empty())
+	{
+		for (const DebugEntry& entry : m_debug_entries)
+		{
+			ProcessDebugEntry(enc, entry);
+		}
+		m_debug_entries.clear();
+	}
+#endif
+}
+
+void GSDeviceMTL::EndDebugGroup(id<MTLCommandEncoder> enc)
+{
+#if MTL_ENABLE_DEBUG
+	if (!m_debug_entries.empty() && m_debug_group_level)
+	{
+		auto begin = m_debug_entries.begin();
+		auto cur = begin;
+		auto end = m_debug_entries.end();
+		while (cur != end && m_debug_group_level)
+		{
+			ProcessDebugEntry(enc, *cur);
+			cur++;
+		}
+		m_debug_entries.erase(begin, cur);
+	}
+#endif
+}
+
+static simd::float2 ToSimd(const ImVec2& vec)
+{
+	return simd::make_float2(vec.x, vec.y);
+}
+
+static simd::float4 ToSimd(const ImVec4& vec)
+{
+	return simd::make_float4(vec.x, vec.y, vec.z, vec.w);
+}
+
+void GSDeviceMTL::RenderImGui(ImDrawData* data)
+{
+	if (data->CmdListsCount == 0)
+		return;
+	simd::float4 transform;
+	transform.xy = 2.f / simd::make_float2(data->DisplaySize.x, -data->DisplaySize.y);
+	transform.zw = ToSimd(data->DisplayPos) * -transform.xy + simd::make_float2(-1, 1);
+	id<MTLRenderCommandEncoder> enc = m_current_render.encoder;
+	[enc pushDebugGroup:@"ImGui"];
+
+	Map map = Allocate(m_vertex_upload_buf, data->TotalVtxCount * sizeof(ImDrawVert) + data->TotalIdxCount * sizeof(ImDrawIdx));
+	size_t vtx_off = 0;
+	size_t idx_off = data->TotalVtxCount * sizeof(ImDrawVert);
+
+	[enc setRenderPipelineState:m_imgui_pipeline];
+	[enc setVertexBuffer:map.gpu_buffer offset:map.gpu_offset atIndex:GSMTLBufferIndexVertices];
+	[enc setVertexBytes:&transform length:sizeof(transform) atIndex:GSMTLBufferIndexUniforms];
+
+	simd::uint4 last_scissor = simd::make_uint4(0, 0, GetWindowWidth(), GetWindowHeight());
+	simd::float2 fb_size = simd_float(last_scissor.zw);
+	simd::float2 clip_off   = ToSimd(data->DisplayPos);       // (0,0) unless using multi-viewports
+	simd::float2 clip_scale = ToSimd(data->FramebufferScale); // (1,1) unless using retina display which are often (2,2)
+	ImTextureID last_tex = reinterpret_cast<ImTextureID>(nullptr);
+
+	for (int i = 0; i < data->CmdListsCount; i++)
+	{
+		const ImDrawList* cmd_list = data->CmdLists[i];
+		size_t vtx_size = cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+		size_t idx_size = cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+		memcpy(static_cast<char*>(map.cpu_buffer) + vtx_off, cmd_list->VtxBuffer.Data, vtx_size);
+		memcpy(static_cast<char*>(map.cpu_buffer) + idx_off, cmd_list->IdxBuffer.Data, idx_size);
+
+		for (const ImDrawCmd& cmd : cmd_list->CmdBuffer)
+		{
+			if (cmd.UserCallback)
+				[NSException raise:@"Unimplemented" format:@"UserCallback not implemented"];
+			if (!cmd.ElemCount)
+				continue;
+
+			simd::float4 clip_rect = (ToSimd(cmd.ClipRect) - clip_off.xyxy) * clip_scale.xyxy;
+			simd::float2 clip_min = clip_rect.xy;
+			simd::float2 clip_max = clip_rect.zw;
+			clip_min = simd::max(clip_min, simd::float2(0));
+			clip_max = simd::min(clip_max, fb_size);
+			if (simd::any(clip_min >= clip_max))
+				continue;
+			simd::uint4 scissor = simd::make_uint4(simd_uint(clip_min), simd_uint(clip_max - clip_min));
+			ImTextureID tex = cmd.GetTexID();
+			if (simd::any(scissor != last_scissor))
+			{
+				last_scissor = scissor;
+				[enc setScissorRect:(MTLScissorRect){ .x = scissor.x, .y = scissor.y, .width = scissor.z, .height = scissor.w }];
+			}
+			if (tex != last_tex)
+			{
+				last_tex = tex;
+				[enc setFragmentTexture:(__bridge id<MTLTexture>)tex atIndex:0];
+			}
+
+			[enc setVertexBufferOffset:map.gpu_offset + vtx_off + cmd.VtxOffset * sizeof(ImDrawVert) atIndex:0];
+			[enc drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+			                indexCount:cmd.ElemCount
+			                 indexType:sizeof(ImDrawIdx) == 2 ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32
+			               indexBuffer:map.gpu_buffer
+			         indexBufferOffset:map.gpu_offset + idx_off + cmd.IdxOffset * sizeof(ImDrawIdx)];
+		}
+
+		vtx_off += vtx_size;
+		idx_off += idx_size;
+	}
+
+	[enc popDebugGroup];
+}
+
+#endif // __APPLE__
