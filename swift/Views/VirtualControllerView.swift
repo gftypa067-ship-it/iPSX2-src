@@ -156,6 +156,9 @@ struct ActionButtonsView: View {
     }
 }
 
+// ================================================================
+// ✅ PSBtn: إصلاح fill و stroke ليتوافق مع iOS 16
+// ================================================================
 struct PSBtn: View {
     let sym: String; let clr: Color; let sz: CGFloat; let btn: iPSX2PadButton
     @State private var on = false
@@ -164,8 +167,14 @@ struct PSBtn: View {
             .font(.system(size: sz * 0.42, weight: .bold))
             .foregroundStyle(on ? .white : clr)
             .frame(width: sz, height: sz)
-            .background(Circle().fill(on ? clr.opacity(0.6) : .black.opacity(0.25))
-                .stroke(clr.opacity(on ? 1.0 : 0.5), lineWidth: on ? 2.5 : 1.5))
+            .background(
+                Circle()
+                    .fill(on ? clr.opacity(0.6) : Color.black.opacity(0.25))
+                    .overlay(
+                        Circle()
+                            .stroke(clr.opacity(on ? 1.0 : 0.5), lineWidth: on ? 2.5 : 1.5)
+                    )
+            )
             .scaleEffect(on ? 0.88 : 1.0)
             .animation(.easeOut(duration: 0.06), value: on)
             .contentShape(Circle())
@@ -180,6 +189,9 @@ struct PSBtn: View {
     }
 }
 
+// ================================================================
+// ✅ PadBtn: إصلاح fill و stroke ليتوافق مع iOS 16
+// ================================================================
 struct PadBtn: View {
     let label: String; let w: CGFloat; let h: CGFloat; let btn: iPSX2PadButton
     @State private var on = false
@@ -188,9 +200,14 @@ struct PadBtn: View {
             .font(.system(size: min(w, h) * 0.38, weight: .semibold))
             .foregroundStyle(on ? .black : .white)
             .frame(width: w, height: h)
-            .background(RoundedRectangle(cornerRadius: 7)
-                .fill(on ? .white.opacity(0.7) : .black.opacity(0.22))
-                .stroke(.white.opacity(on ? 0.8 : 0.25), lineWidth: 1))
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(on ? Color.white.opacity(0.7) : Color.black.opacity(0.22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(Color.white.opacity(on ? 0.8 : 0.25), lineWidth: 1)
+                    )
+            )
             .scaleEffect(on ? 0.9 : 1.0)
             .animation(.easeOut(duration: 0.06), value: on)
             .contentShape(Rectangle())
@@ -205,7 +222,9 @@ struct PadBtn: View {
     }
 }
 
-// MARK: - Analog Stick with L3/R3 tap
+// ================================================================
+// ✅ StickView: إصلاح fill و stroke ليتوافق مع iOS 16
+// ================================================================
 struct StickView: View {
     let isLeft: Bool
     let sz: CGFloat = 68; let knob: CGFloat = 30
@@ -214,8 +233,17 @@ struct StickView: View {
 
     var body: some View {
         ZStack {
-            Circle().fill(.black.opacity(0.18)).stroke(.white.opacity(0.18), lineWidth: 1).frame(width: sz)
-            Circle().fill(.white.opacity(0.35)).frame(width: knob).offset(off)
+            Circle()
+                .fill(Color.black.opacity(0.18))
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                )
+                .frame(width: sz)
+            Circle()
+                .fill(Color.white.opacity(0.35))
+                .frame(width: knob)
+                .offset(off)
             // L3/R3 label
             Text(isLeft ? "L3" : "R3")
                 .font(.system(size: 9, weight: .medium))
