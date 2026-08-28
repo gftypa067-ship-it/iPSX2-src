@@ -4,8 +4,9 @@
 import SwiftUI
 
 struct GameScreenView: View {
-    @State private var appState = AppState.shared
-    @State private var settings = SettingsStore.shared
+    // ✅ التعديل: استخدام StateObject بدلاً من State لتحديث الواجهة عند تغيير الحالة والإعدادات
+    @StateObject private var appState = AppState.shared
+    @StateObject private var settings = SettingsStore.shared
     @State private var padVisible = true
     @State private var fullScreen = false
 
@@ -41,9 +42,6 @@ struct GameScreenView: View {
                 }
             }
         }
-        // ================================================================
-        // ✅ التعديل: إزالة المعامل الأول (_) من onChange ليتوافق مع iOS 16
-        // ================================================================
         .onChange(of: fullScreen) { newValue in
             iPSX2Bridge.setFullScreen(newValue)
         }
