@@ -4,7 +4,8 @@
 import SwiftUI
 
 struct VirtualPadSettingsView: View {
-    @State private var settings = SettingsStore.shared
+    // ✅ التعديل: استخدام StateObject بدلاً من State لتحديث الواجهة عند تغيير الإعدادات
+    @StateObject private var settings = SettingsStore.shared
     @State private var showLayoutEditor = false
 
     var body: some View {
