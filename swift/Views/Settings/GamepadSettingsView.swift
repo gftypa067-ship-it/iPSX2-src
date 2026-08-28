@@ -50,7 +50,8 @@ private func sdlButtonName(_ idx: Int) -> String {
 }
 
 struct GamepadSettingsView: View {
-    @State private var settings = SettingsStore.shared
+    // ✅ التعديل: استخدام StateObject بدلاً من State لتحديث الواجهة عند تغيير الإعدادات
+    @StateObject private var settings = SettingsStore.shared
     @State private var capturingIndex: Int? = nil
     @State private var mappingVersion = 0
     @State private var pollTimer: Timer? = nil
