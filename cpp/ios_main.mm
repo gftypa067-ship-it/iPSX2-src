@@ -1007,6 +1007,9 @@ INISettingsInterface* g_p44_settings_interface = nullptr;
 #if TARGET_OS_SIMULATOR
         [[VMController sharedInstance] startVMThread];
 #else
+        // ================================================================
+        // ✅ التعديل: استخدام Interpreter بدلاً من JIT (لتجنب الانهيارات)
+        // ================================================================
         [self checkJITAndStartVM];
 #endif
     }];
@@ -1314,26 +1317,36 @@ INISettingsInterface* g_p44_settings_interface = nullptr;
     }
 }
 
-// JIT availability check for real device — fallback to Interpreter if JIT unavailable
-// CS_DEBUGGED check only (DolphiniOS approach) — no blocking, runs on main thread
+// ================================================================
+// ✅ JIT FIX: إجبار استخدام Interpreter بدلاً من JIT
+// ================================================================
 - (void)checkJITAndStartVM {
 #if !TARGET_OS_SIMULATOR
-    if (DarwinMisc::IsJITAvailable()) {
-        Console.WriteLn("@@JIT_GATE@@ JIT available — starting VM in JIT mode");
-        [[VMController sharedInstance] startVMThread];
-        return;
-    }
-
-    Console.Warning("@@JIT_GATE@@ JIT NOT available — falling back to Interpreter mode");
+    // ================================================================
+    // ✅ تم التعليق على كود JIT الأصلي واستبداله بـ Interpreter فقط
+    // لتجنب انهيارات MAP_JIT و SIGBUS
+    // ================================================================
+    
+    // الكود الأصلي (معلق):
+    // if (DarwinMisc::IsJITAvailable()) {
+    //     Console.WriteLn("@@JIT_GATE@@ JIT available — starting VM in JIT mode");
+    //     [[VMController sharedInstance] startVMThread];
+    //     return;
+    // }
+    // Console.Warning("@@JIT_GATE@@ JIT NOT available — falling back to Interpreter mode");
+    // DarwinMisc::iPSX2_FORCE_EE_INTERP = 1;
+    
+    // ✅ الكود الجديد (إجبار Interpreter دائماً):
+    Console.WriteLn("@@JIT_GATE@@ JIT disabled — using Interpreter mode for stability");
     DarwinMisc::iPSX2_FORCE_EE_INTERP = 1;
-    Console.WriteLn("@@JIT_GATE@@ iPSX2_FORCE_EE_INTERP forced to 1");
+    DarwinMisc::iPSX2_FORCE_IOP_INTERP = 1;
+    DarwinMisc::iPSX2_FORCE_VU_INTERP = 1;
+    Console.WriteLn("@@JIT_GATE@@ EE/IOP/VU Interpreter forced ON");
     [[VMController sharedInstance] startVMThread];
 #else
     [[VMController sharedInstance] startVMThread];
 #endif
 }
-
-
 
 - (void)sceneDidDisconnect:(UIScene *)scene {
     s_menuVC = nil;
