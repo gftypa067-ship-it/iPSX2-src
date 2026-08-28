@@ -196,7 +196,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
         MACOSX_BUNDLE_EXECUTABLE_NAME "iPSX2"
         XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.otti83.iPSX2"
         XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2" # 1=iPhone, 2=iPad
-        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
+        # ================================================================
+        # ✅ التعديل: تغيير إصدار النشر من 18.0 إلى 16.0
+        # ================================================================
+        XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.0"
         XCODE_ATTRIBUTE_SDKROOT "${CMAKE_OSX_SYSROOT}"
         XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
         XCODE_ATTRIBUTE_CODE_SIGN_STYLE "Manual"
