@@ -50,7 +50,6 @@
 #include <atomic>
 #include <optional>
 #include <sys/stat.h> // For mkdir
-#include <pthread.h>  // For pthread_jit_write_protect_np
 
 struct rc_client_event_t;
 struct rc_client_t;
@@ -1008,9 +1007,6 @@ INISettingsInterface* g_p44_settings_interface = nullptr;
 #if TARGET_OS_SIMULATOR
         [[VMController sharedInstance] startVMThread];
 #else
-        // ================================================================
-        // ✅ استخدم الدالة المحسنة مع دعم JIT عبر TrollStore
-        // ================================================================
         [self checkJITAndStartVM];
 #endif
     }];
@@ -1319,55 +1315,20 @@ INISettingsInterface* g_p44_settings_interface = nullptr;
 }
 
 // ================================================================
-// ✅ JIT FIX: محاولة استخدام JIT مع TrollStore عبر pthread_jit_write_protect_np
+// ✅ JIT FIX المبسطة: محاولة JIT ثم Interpreter إذا لم يتوفر
 // ================================================================
 - (void)checkJITAndStartVM {
 #if !TARGET_OS_SIMULATOR
-    // محاولة تمكين JIT باستخدام pthread_jit_write_protect_np
-    bool jitEnabled = false;
-    
-    if (@available(iOS 14.0, *)) {
-        // اختبار تخصيص ذاكرة JIT
-        Console.WriteLn("@@JIT_GATE@@ Testing JIT allocation via pthread_jit_write_protect_np");
-        
-        // تعطيل حماية الكتابة للذاكرة القابلة للتنفيذ
-        pthread_jit_write_protect_np(false);
-        
-        // محاولة تخصيص ذاكرة قابلة للتنفيذ
-        void* testMem = mmap(NULL, 0x4000, PROT_READ | PROT_WRITE | PROT_EXEC,
-                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        
-        if (testMem != MAP_FAILED) {
-            // نجح التخصيص، JIT يعمل
-            munmap(testMem, 0x4000);
-            jitEnabled = true;
-            Console.WriteLn("@@JIT_GATE@@ JIT allocation successful with pthread_jit_write_protect_np");
-        } else {
-            Console.WriteLn("@@JIT_GATE@@ JIT allocation failed (errno=%d), falling back to Interpreter", errno);
-        }
-        
-        // إعادة تفعيل حماية الكتابة
-        pthread_jit_write_protect_np(true);
-    } else {
-        Console.WriteLn("@@JIT_GATE@@ iOS version < 14.0, JIT not supported via pthread");
-    }
-    
-    if (jitEnabled) {
-        // استخدام JIT مع الإعدادات الافتراضية
-        Console.WriteLn("@@JIT_GATE@@ Starting VM with JIT enabled");
-        // تأكد من عدم إجبار Interpreter
+    if (DarwinMisc::IsJITAvailable()) {
+        Console.WriteLn("@@JIT_GATE@@ JIT available — starting VM in JIT mode");
         DarwinMisc::iPSX2_FORCE_EE_INTERP = 0;
-        DarwinMisc::iPSX2_FORCE_IOP_INTERP = 0;
-        DarwinMisc::iPSX2_FORCE_VU_INTERP = 0;
         [[VMController sharedInstance] startVMThread];
-    } else {
-        // إجبار Interpreter
-        Console.Warning("@@JIT_GATE@@ JIT unavailable, falling back to Interpreter mode");
-        DarwinMisc::iPSX2_FORCE_EE_INTERP = 1;
-        DarwinMisc::iPSX2_FORCE_IOP_INTERP = 1;
-        DarwinMisc::iPSX2_FORCE_VU_INTERP = 1;
-        [[VMController sharedInstance] startVMThread];
+        return;
     }
+
+    Console.Warning("@@JIT_GATE@@ JIT NOT available — falling back to Interpreter mode");
+    DarwinMisc::iPSX2_FORCE_EE_INTERP = 1;
+    [[VMController sharedInstance] startVMThread];
 #else
     [[VMController sharedInstance] startVMThread];
 #endif
