@@ -33,7 +33,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
                 self.pendingBootAction = nil
                 action()
             } else {
-                // ✅ العودة إلى القائمة فقط إذا لم نكن بالفعل في القائمة
                 if self.currentScreen != .menu {
                     self.currentScreen = .menu
                 }
@@ -84,8 +83,8 @@ final class AppState: ObservableObject, @unchecked Sendable {
             isReturningToMenu = false
         }
         
-        // إشعار لـ ObjC side (اختياري)
-        NotificationCenter.default.post(name: NSNotification.Name("iPSX2ReturnToMenu"), object: nil)
+        // ✅ تمت إزالة الإشعار iPSX2ReturnToMenu لأنه يسبب حلقة لا نهائية
+        // NotificationCenter.default.post(name: NSNotification.Name("iPSX2ReturnToMenu"), object: nil)
     }
 
     func returnToGame() {
