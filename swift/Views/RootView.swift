@@ -5,8 +5,9 @@ import SwiftUI
 import UIKit
 
 struct RootView: View {
-    @State private var appState = AppState.shared
-    @State private var fileImporter = FileImportHandler.shared
+    // ✅ استخدام StateObject بدلاً من State لمراقبة التغييرات
+    @StateObject private var appState = AppState.shared
+    @StateObject private var fileImporter = FileImportHandler.shared
     @AppStorage("colorScheme") private var colorSchemeRaw: String = "system"
 
     var body: some View {
@@ -21,9 +22,6 @@ struct RootView: View {
             }
         }
         .onAppear { applyTheme(colorSchemeRaw) }
-        // ============================================================
-        // التعديل: إزالة المعامل الأول (_) من onChange ليتوافق مع iOS 16
-        // ============================================================
         .onChange(of: colorSchemeRaw) { newValue in applyTheme(newValue) }
         .onOpenURL { url in
             fileImporter.handleURL(url)
@@ -50,7 +48,8 @@ struct RootView: View {
 }
 
 struct MenuTabView: View {
-    @State private var appState = AppState.shared
+    // ✅ استخدام ObservedObject لأن MenuTabView ليست المالك الأول
+    @ObservedObject private var appState = AppState.shared
     @State private var selectedTab = 0
 
     var body: some View {
