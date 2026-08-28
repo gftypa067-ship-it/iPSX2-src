@@ -37,7 +37,12 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         didSet { saveAndNotify() }
     }
     @Published var fastBoot: Bool {
-        didSet { saveAndNotify() }
+        didSet {
+            // ✅ تحديث EmuConfig لضمان تطبيق الإعداد فوراً
+            EmuConfig.GS.FastBoot = fastBoot
+            iPSX2Bridge.setINIBool("GameISO", key: "FastBoot", value: fastBoot)
+            saveAndNotify()
+        }
     }
     @Published var fastmem: Bool {
         didSet { saveAndNotify() }
@@ -130,6 +135,7 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
 
     // ── Init from INI ──
     private init() {
+        // تحميل القيم من INI
         eeCoreType = Int(iPSX2Bridge.getINIInt("EmuCore/CPU", key: "CoreType", defaultValue: 0))
         iopRecompiler = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableIOP", defaultValue: true)
         vu0Recompiler = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableVU0", defaultValue: true)
@@ -162,11 +168,46 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
         hapticFeedback = iPSX2Bridge.getINIBool("iPSX2/UI", key: "HapticFeedback", defaultValue: true)
         iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "vuThread", value: false)
         iPSX2Bridge.applyOsdPreset(Int32(clamping:osdPreset.rawValue))
+        
+        // ✅ مزامنة EmuConfig مع القيم المقروءة
+        EmuConfig.GS.FastBoot = fastBoot
     }
 
+    /// Reload ALL settings from INI (call on VM start/stop)
     func reload() {
-        // ... (نفس الكود السابق، لا تغيير)
-        // يمكنك نسخه من الملف الأصلي
+        eeCoreType = Int(iPSX2Bridge.getINIInt("EmuCore/CPU", key: "CoreType", defaultValue: 0))
+        iopRecompiler = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableIOP", defaultValue: true)
+        vu0Recompiler = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableVU0", defaultValue: true)
+        vu1Recompiler = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableVU1", defaultValue: true)
+        fastBoot = iPSX2Bridge.getINIBool("GameISO", key: "FastBoot", defaultValue: false)
+        fastmem = iPSX2Bridge.getINIBool("EmuCore/CPU/Recompiler", key: "EnableFastmem", defaultValue: true)
+        fastCDVD = iPSX2Bridge.getINIBool("EmuCore/Speedhacks", key: "fastCDVD", defaultValue: false)
+        eeCycleRate = Int(iPSX2Bridge.getINIInt("EmuCore/Speedhacks", key: "EECycleRate", defaultValue: 0))
+        vu1Instant = iPSX2Bridge.getINIBool("EmuCore/Speedhacks", key: "vu1Instant", defaultValue: true)
+        waitLoop = iPSX2Bridge.getINIBool("EmuCore/Speedhacks", key: "WaitLoop", defaultValue: true)
+        intcStat = iPSX2Bridge.getINIBool("EmuCore/Speedhacks", key: "IntcStat", defaultValue: true)
+        renderer = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "Renderer", defaultValue: 17))
+        upscaleMultiplier = iPSX2Bridge.getINIFloat("EmuCore/GS", key: "upscale_multiplier", defaultValue: 1.0)
+        vsyncQueueSize = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "VsyncQueueSize", defaultValue: 8))
+        textureFiltering = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "filter", defaultValue: 2))
+        fxaa = iPSX2Bridge.getINIBool("EmuCore/GS", key: "fxaa", defaultValue: false)
+        casMode = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "CASMode", defaultValue: 0))
+        casSharpness = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "CASSharpness", defaultValue: 50))
+        interlaceMode = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "deinterlace_mode", defaultValue: 7))
+        aspectRatio = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "AspectRatio", defaultValue: 0))
+        blendingAccuracy = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "accurate_blending_unit", defaultValue: 1))
+        dithering = Int(iPSX2Bridge.getINIInt("EmuCore/GS", key: "dithering_ps2", defaultValue: 2))
+        osdPreset = OsdPreset(rawValue: Int(iPSX2Bridge.getINIInt("iPSX2/UI", key: "OsdPreset", defaultValue: 0))) ?? .off
+        osdShowFPS = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowFPS", defaultValue: false)
+        osdShowSpeed = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowSpeed", defaultValue: false)
+        osdShowCPU = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowCPU", defaultValue: false)
+        osdShowResolution = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowResolution", defaultValue: false)
+        osdShowFrameTimes = iPSX2Bridge.getINIBool("EmuCore/GS", key: "OsdShowFrameTimes", defaultValue: false)
+        padOpacity = iPSX2Bridge.getINIFloat("iPSX2/UI", key: "PadOpacity", defaultValue: 0.6)
+        hapticFeedback = iPSX2Bridge.getINIBool("iPSX2/UI", key: "HapticFeedback", defaultValue: true)
+        
+        // ✅ مزامنة EmuConfig بعد إعادة التحميل
+        EmuConfig.GS.FastBoot = fastBoot
     }
 
     private func applyOsdPreset(_ preset: OsdPreset) {
@@ -217,8 +258,6 @@ final class SettingsStore: ObservableObject, @unchecked Sendable {
     }
 
     private func saveAndNotify() {
-        // ✅ إجبار الواجهة على التحديث
         objectWillChange.send()
-        // ✅ دوال setINIInt وغيرها تقوم بالحفظ تلقائياً (تستدعي Save())
     }
 }
