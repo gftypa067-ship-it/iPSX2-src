@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 import SwiftUI
+import Combine
 
 struct PadGroupPosition {
     var x: CGFloat
@@ -9,14 +10,13 @@ struct PadGroupPosition {
     var scale: CGFloat
 }
 
-@Observable
-final class PadLayoutStore: @unchecked Sendable {
+final class PadLayoutStore: ObservableObject, @unchecked Sendable {
     static let shared = PadLayoutStore()
 
     static let groupIDs = ["dpad", "action", "l1", "l2", "r1", "r2", "lstick", "rstick", "select", "start"]
 
-    var portrait: [String: PadGroupPosition] = [:]
-    var landscape: [String: PadGroupPosition] = [:]
+    @Published var portrait: [String: PadGroupPosition] = [:]
+    @Published var landscape: [String: PadGroupPosition] = [:]
 
     // MARK: - Default positions (derived from current hardcoded layout)
 
