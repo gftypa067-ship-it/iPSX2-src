@@ -20,20 +20,25 @@ final class AppState: ObservableObject, @unchecked Sendable {
     private var pendingBootAction: (() -> Void)?
     private var shutdownObserver: NSObjectProtocol?
     private var autoBootObserver: NSObjectProtocol?
+    private var isReturningToMenu = false  // ✅ لمنع الحلقات اللانهائية
 
     private init() {
         shutdownObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("iPSX2VMDidShutdown"),
             object: nil, queue: .main
         ) { [weak self] _ in
-            self?.runningGameName = nil
-            if let action = self?.pendingBootAction {
-                self?.pendingBootAction = nil
+            guard let self = self else { return }
+            self.runningGameName = nil
+            if let action = self.pendingBootAction {
+                self.pendingBootAction = nil
                 action()
             } else {
-                // ✅ العودة إلى القائمة بعد إيقاف VM
-                self?.currentScreen = .menu
+                // ✅ العودة إلى القائمة فقط إذا لم نكن بالفعل في القائمة
+                if self.currentScreen != .menu {
+                    self.currentScreen = .menu
+                }
             }
+            self.isReturningToMenu = false
         }
 
         autoBootObserver = NotificationCenter.default.addObserver(
@@ -59,18 +64,27 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentScreen = .playing
     }
 
-    // ✅ إصلاح شامل لدالة العودة إلى القائمة
+    // ✅ إصلاح شامل لدالة العودة إلى القائمة (يمنع الـ Crash)
     func returnToMenu() {
-        // 1. تغيير الحالة فوراً
+        // منع استدعاء الدالة مرتين في نفس الوقت
+        guard !isReturningToMenu else { return }
+        guard currentScreen != .menu else { return }
+        
+        isReturningToMenu = true
+        
+        // تغيير الحالة فوراً
         currentScreen = .menu
         runningGameName = nil
         
-        // 2. إذا كان VM يعمل، أطلب إيقافه
+        // إذا كان VM يعمل، أطلب إيقافه
         if iPSX2Bridge.isVMRunning() {
             iPSX2Bridge.requestVMShutdown()
+        } else {
+            // إذا لم يكن VM يعمل، نحرر القفل فوراً
+            isReturningToMenu = false
         }
         
-        // 3. إشعار لـ ObjC side (اختياري)
+        // إشعار لـ ObjC side (اختياري)
         NotificationCenter.default.post(name: NSNotification.Name("iPSX2ReturnToMenu"), object: nil)
     }
 
