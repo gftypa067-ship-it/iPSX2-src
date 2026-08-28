@@ -19,7 +19,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
 
     private var pendingBootAction: (() -> Void)?
     private var shutdownObserver: NSObjectProtocol?
-
     private var autoBootObserver: NSObjectProtocol?
 
     private init() {
@@ -37,7 +36,6 @@ final class AppState: ObservableObject, @unchecked Sendable {
             }
         }
 
-        // [P48] Auto-boot: ObjC side posts this notification to switch UI to game screen
         autoBootObserver = NotificationCenter.default.addObserver(
             forName: NSNotification.Name("iPSX2AutoBootDidStart"),
             object: nil, queue: .main
@@ -61,15 +59,18 @@ final class AppState: ObservableObject, @unchecked Sendable {
         currentScreen = .playing
     }
 
+    // ================================================================
+    // ✅ التعديل: تحديث الحالة مباشرة بدلاً من الاعتماد على الإشعار فقط
+    // ================================================================
     func returnToMenu() {
         currentScreen = .menu
-        // [P44-2] Restore opaque background on hosting controller
+        runningGameName = nil
+        // إشعار لـ ObjC side (اختياري، للحفاظ على التوافق)
         NotificationCenter.default.post(name: NSNotification.Name("iPSX2ReturnToMenu"), object: nil)
     }
 
     func returnToGame() {
         if runningGameName != nil {
-            // [P44-2] Clear background so Metal surface shows through
             NotificationCenter.default.post(name: NSNotification.Name("iPSX2EnterGameScreen"), object: nil)
             currentScreen = .playing
         }
