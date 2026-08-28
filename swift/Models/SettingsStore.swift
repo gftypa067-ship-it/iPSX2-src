@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0+
 
 import SwiftUI
+import Combine
 
 /// [P51] OSD preset levels
 enum OsdPreset: Int, CaseIterable {
@@ -20,112 +21,111 @@ enum OsdPreset: Int, CaseIterable {
     }
 }
 
-@Observable
-final class SettingsStore: @unchecked Sendable {
+final class SettingsStore: ObservableObject, @unchecked Sendable {
     static let shared = SettingsStore()
 
     // ── Emulator / CPU ──
-    var eeCoreType: Int {
+    @Published var eeCoreType: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/CPU", key: "CoreType", value: Int32(clamping:eeCoreType)) }
     }
-    var iopRecompiler: Bool {
+    @Published var iopRecompiler: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableIOP", value: iopRecompiler) }
     }
-    var vu0Recompiler: Bool {
+    @Published var vu0Recompiler: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableVU0", value: vu0Recompiler) }
     }
-    var vu1Recompiler: Bool {
+    @Published var vu1Recompiler: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableVU1", value: vu1Recompiler) }
     }
-    var fastBoot: Bool {
+    @Published var fastBoot: Bool {
         didSet { iPSX2Bridge.setINIBool("GameISO", key: "FastBoot", value: fastBoot) }
     }
-    var fastmem: Bool {
+    @Published var fastmem: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/CPU/Recompiler", key: "EnableFastmem", value: fastmem) }
     }
 
     // ── Boot ──
-    var fastCDVD: Bool {
+    @Published var fastCDVD: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "fastCDVD", value: fastCDVD) }
     }
 
     // ── Advanced Speedhacks ──
-    var eeCycleRate: Int {
+    @Published var eeCycleRate: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/Speedhacks", key: "EECycleRate", value: Int32(clamping:eeCycleRate)) }
     }
-    var vu1Instant: Bool {
+    @Published var vu1Instant: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "vu1Instant", value: vu1Instant) }
     }
-    var waitLoop: Bool {
+    @Published var waitLoop: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "WaitLoop", value: waitLoop) }
     }
-    var intcStat: Bool {
+    @Published var intcStat: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/Speedhacks", key: "IntcStat", value: intcStat) }
     }
 
     // ── Graphics ──
-    var renderer: Int {
+    @Published var renderer: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "Renderer", value: Int32(clamping:renderer)) }
     }
-    var upscaleMultiplier: Float {
+    @Published var upscaleMultiplier: Float {
         didSet { iPSX2Bridge.setINIFloat("EmuCore/GS", key: "upscale_multiplier", value: upscaleMultiplier) }
     }
-    var vsyncQueueSize: Int {
+    @Published var vsyncQueueSize: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "VsyncQueueSize", value: Int32(clamping:vsyncQueueSize)) }
     }
-    var textureFiltering: Int {
+    @Published var textureFiltering: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "filter", value: Int32(clamping:textureFiltering)) }
     }
-    var fxaa: Bool {
+    @Published var fxaa: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "fxaa", value: fxaa) }
     }
-    var casMode: Int {
+    @Published var casMode: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "CASMode", value: Int32(clamping:casMode)) }
     }
-    var casSharpness: Int {
+    @Published var casSharpness: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "CASSharpness", value: Int32(clamping:casSharpness)) }
     }
-    var interlaceMode: Int {
+    @Published var interlaceMode: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "deinterlace_mode", value: Int32(clamping:interlaceMode)) }
     }
-    var aspectRatio: Int {
+    @Published var aspectRatio: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "AspectRatio", value: Int32(clamping:aspectRatio)) }
     }
-    var blendingAccuracy: Int {
+    @Published var blendingAccuracy: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "accurate_blending_unit", value: Int32(clamping:blendingAccuracy)) }
     }
-    var dithering: Int {
+    @Published var dithering: Int {
         didSet { iPSX2Bridge.setINIInt("EmuCore/GS", key: "dithering_ps2", value: Int32(clamping:dithering)) }
     }
 
     // ── OSD Overlay ──
-    var osdPreset: OsdPreset {
+    @Published var osdPreset: OsdPreset {
         didSet {
             iPSX2Bridge.setINIInt("iPSX2/UI", key: "OsdPreset", value: Int32(clamping:osdPreset.rawValue))
             applyOsdPreset(osdPreset)
         }
     }
-    var osdShowFPS: Bool {
+    @Published var osdShowFPS: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowFPS", value: osdShowFPS) }
     }
-    var osdShowSpeed: Bool {
+    @Published var osdShowSpeed: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowSpeed", value: osdShowSpeed) }
     }
-    var osdShowCPU: Bool {
+    @Published var osdShowCPU: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowCPU", value: osdShowCPU) }
     }
-    var osdShowResolution: Bool {
+    @Published var osdShowResolution: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowResolution", value: osdShowResolution) }
     }
-    var osdShowFrameTimes: Bool {
+    @Published var osdShowFrameTimes: Bool {
         didSet { iPSX2Bridge.setINIBool("EmuCore/GS", key: "OsdShowFrameTimes", value: osdShowFrameTimes) }
     }
 
     // ── Gamepad / UI ──
-    var padOpacity: Float {
+    @Published var padOpacity: Float {
         didSet { iPSX2Bridge.setINIFloat("iPSX2/UI", key: "PadOpacity", value: padOpacity) }
     }
-    var hapticFeedback: Bool {
+    @Published var hapticFeedback: Bool {
         didSet { iPSX2Bridge.setINIBool("iPSX2/UI", key: "HapticFeedback", value: hapticFeedback) }
     }
 
