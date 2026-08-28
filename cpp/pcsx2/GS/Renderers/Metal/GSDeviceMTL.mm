@@ -57,27 +57,12 @@ std::vector<GSAdapterInfo> GetMetalAdapterList()
 	}
 	else
 	{
-		// Fallback: try MTLCopyAllDevices (for macOS only, but safe)
-		// Note: This is only reached if MTLCreateSystemDefaultDevice fails (unlikely)
-		Console.Error("Metal: MTLCreateSystemDefaultDevice failed, falling back to MTLCopyAllDevices (macOS only)");
-		NSArray<id<MTLDevice>>* allDevices = MTLCopyAllDevices();
-		for (id<MTLDevice> dev in allDevices)
-		{
-			GSAdapterInfo ai;
-			ai.name = [[dev name] UTF8String];
-			
-			ai.max_texture_size = 8192;
-			#if !TARGET_OS_IPHONE
-			if ([dev supportsFeatureSet:MTLFeatureSet_macOS_GPUFamily1_v1])
-				ai.max_texture_size = 16384;
-#endif
-			if (@available(macOS 10.15, iOS 13.0, *))
-				if ([dev supportsFamily:MTLGPUFamilyApple3])
-					ai.max_texture_size = 16384;
-
-			ai.max_upscale_multiplier = GSGetMaxUpscaleMultiplier(ai.max_texture_size);
-			list.push_back(std::move(ai));
-		}
+		// ================================================================
+		// ✅ التعديل: إزالة MTLCopyAllDevices ومنع fallback على iOS
+		// ================================================================
+		Console.Error("Metal: MTLCreateSystemDefaultDevice failed. No Metal device available on this iOS version.");
+		// Return empty list to avoid crashing
+		return list;
 	}
 	return list;
 }}
@@ -900,7 +885,7 @@ static MRCOwned<id<MTLSamplerState>> CreateSampler(id<MTLDevice> dev, GSHWDrawCo
 }
 
 // ================================================================
-// ✅ إصلاح GSDeviceMTL::Create: استخدام MTLCreateSystemDefaultDevice
+// ✅ إصلاح GSDeviceMTL::Create: استخدام MTLCreateSystemDefaultDevice (بدون MTLCopyAllDevices)
 // ================================================================
 bool GSDeviceMTL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 { @autoreleasepool {
@@ -911,44 +896,30 @@ bool GSDeviceMTL::Create(GSVSyncMode vsync_mode, bool allow_present_throttle)
 
 	NSString* ns_adapter_name = [NSString stringWithUTF8String:GSConfig.Adapter.c_str()];
 	
-	// iOS 16+ primary method: MTLCreateSystemDefaultDevice
+	// ================================================================
+	// iOS 16+ : use MTLCreateSystemDefaultDevice ONLY
+	// ================================================================
 	id<MTLDevice> defaultDevice = MTLCreateSystemDefaultDevice();
-	
+	if (!defaultDevice)
+	{
+		Console.Error("Metal: MTLCreateSystemDefaultDevice failed. No Metal device available.");
+		Host::ReportErrorAsync(TRANSLATE_SV("GSDeviceMTL", "No Metal Devices Available"),
+		                       TRANSLATE_SV("GSDeviceMTL", "No Metal-supporting GPUs were found.  PCSX2 requires a Metal GPU."));
+		return false;
+	}
+
+	// If a specific adapter is requested, check if it matches the default.
+	// On iOS, we only have one device, so we ignore custom adapter names.
 	if (ns_adapter_name && [ns_adapter_name length] > 0)
 	{
-		// If a specific adapter is requested, find it
-		if (defaultDevice && [[defaultDevice name] isEqualToString:ns_adapter_name])
+		if (![[defaultDevice name] isEqualToString:ns_adapter_name])
 		{
-			m_dev = GSMTLDevice(MRCRetain(defaultDevice));
-		}
-		else
-		{
-			// Fallback: search all devices (macOS only)
-			NSArray<id<MTLDevice>>* allDevices = MTLCopyAllDevices();
-			for (id<MTLDevice> dev in allDevices)
-			{
-				if ([[dev name] isEqualToString:ns_adapter_name])
-				{
-					m_dev = GSMTLDevice(MRCRetain(dev));
-					break;
-				}
-			}
-			if (!m_dev.dev)
-			{
-				Console.Warning("Metal: Couldn't find adapter %s, using default", GSConfig.Adapter.c_str());
-				m_dev = GSMTLDevice(MRCRetain(defaultDevice ? defaultDevice : MTLCreateSystemDefaultDevice()));
-			}
+			Console.Warning("Metal: Requested adapter '%s' not found; using default device '%s'.",
+			                [ns_adapter_name UTF8String], [[defaultDevice name] UTF8String]);
 		}
 	}
-	else
-	{
-		// Use default device
-		if (!defaultDevice)
-		{
-			Console.Error("Metal: MTLCreateSystemDefaultDevice failed. This device may not support Metal.");
-		}
-		m_dev = GSMTLDevice(MRCRetain(defaultDevice ? defaultDevice : MTLCreateSystemDefaultDevice()));
-	}
+
+	m_dev = GSMTLDevice(MRCRetain(defaultDevice));
 	
 	if (!m_dev.dev) {
 		Console.WriteLn("GSDeviceMTL::Create: No Metal Devices Available");
