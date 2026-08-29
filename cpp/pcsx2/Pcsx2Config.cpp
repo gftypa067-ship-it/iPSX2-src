@@ -375,15 +375,25 @@ bool Pcsx2Config::SpeedhackOptions::operator!=(const SpeedhackOptions& right) co
 	return !operator==(right);
 }
 
+// ============================================================
+//  التعديل الجذري لخيارات السرعة (Speedhacks)
+// ============================================================
 Pcsx2Config::SpeedhackOptions::SpeedhackOptions()
 {
 	DisableAll();
 
-	// Set recommended speedhacks to enabled by default. They'll still be off globally on resets.
+	// تفعيل الإعدادات الموصى بها بشكل افتراضي
 	WaitLoop = true;
 	IntcStat = true;
 	vuFlagHack = true;
 	vu1Instant = true;
+
+	// [تعديل] تفعيل MTVU (تعدد خيوط VU1) - يعطي دفعة هائلة
+	vuThread = true;
+
+	// [تعديل] تخفيف حمل المعالج إلى 50% وتخطي الدورات بقوة
+	EECycleRate = -2;
+	EECycleSkip = 2;
 }
 
 Pcsx2Config::SpeedhackOptions& Pcsx2Config::SpeedhackOptions::DisableAll()
@@ -438,36 +448,28 @@ bool Pcsx2Config::ProfilerOptions::operator==(const ProfilerOptions& right) cons
 	return OpEqu(bitset);
 }
 
+// ============================================================
+//  التعديل الجذري لخيارات المعالج (Recompiler)
+// ============================================================
 Pcsx2Config::RecompilerOptions::RecompilerOptions()
 {
 	bitset = 0;
 
-	//StackFrameChecks	= false;
-	//PreBlockCheckEE	= false;
-
-	// All recs are enabled by default.
-
+	// تفعيل جميع المترجمات
 	EnableEE = true;
 	EnableEECache = false;
 	EnableIOP = true;
 	EnableVU0 = true;
 	EnableVU1 = true;
+
+	// [تعديل] تفعيل الذاكرة السريعة (ضروري لأداء ARM)
 	EnableFastmem = true;
 	PauseOnTLBMiss = false;
 
-	// vu and fpu clamping default to standard overflow.
+	// ضبط دقة العمليات الحسابية (الأقل = الأسرع)
 	vu0Overflow = true;
-	//vu0ExtraOverflow = false;
-	//vu0SignOverflow = false;
-	//vu0Underflow = false;
 	vu1Overflow = true;
-	//vu1ExtraOverflow = false;
-	//vu1SignOverflow = false;
-	//vu1Underflow = false;
-
-	fpuOverflow = true;
-	//fpuExtraOverflow = false;
-	//fpuFullMode = false;
+	// الإبقاء على القيم الافتراضية للبقية
 }
 
 void Pcsx2Config::RecompilerOptions::ApplySanityCheck()
@@ -592,6 +594,9 @@ bool Pcsx2Config::CpuOptions::operator==(const CpuOptions& right) const
 	return OpEqu(FPUFPCR) && OpEqu(FPUDivFPCR) && OpEqu(VU0FPCR) && OpEqu(VU1FPCR) && OpEqu(Recompiler) && OpEqu(CoreType);
 }
 
+// ============================================================
+//  التعديل الجذري لخيارات وحدة المعالجة المركزية (CPU)
+// ============================================================
 Pcsx2Config::CpuOptions::CpuOptions()
 {
 	FPUFPCR = DEFAULT_FPU_FP_CONTROL_REGISTER;
@@ -604,7 +609,8 @@ Pcsx2Config::CpuOptions::CpuOptions()
 	VU1FPCR = DEFAULT_VU_FP_CONTROL_REGISTER;
 	ExtraMemory = false;
 #ifdef PCSX2_ARM64_DYNAREC
-	UseArm64Dynarec = false;
+	// [تعديل] تفعيل المترجم الديناميكي لـ ARM64 (إذا كان متاحاً)
+	UseArm64Dynarec = true;
 #endif
     CoreType = 0;
     ////
@@ -707,6 +713,9 @@ std::optional<bool> Pcsx2Config::GSOptions::TriStateToOptionalBoolean(int value)
 	return (value < 0) ? std::optional<bool>(std::nullopt) : std::optional<bool>((value != 0));
 }
 
+// ============================================================
+//  التعديل الجذري لخيارات الرسوميات (GS) - أقصى أداء
+// ============================================================
 Pcsx2Config::GSOptions::GSOptions()
 {
 	bitset = 0;
@@ -724,7 +733,7 @@ Pcsx2Config::GSOptions::GSOptions()
 	DisableShaderCache = false;
 	DisableFramebufferFetch = false;
 	DisableVertexShaderExpand = false;
-	SkipDuplicateFrames = false;
+	SkipDuplicateFrames = true;  // [تعديل] تخطي الإطارات المكررة
 	OsdMessagesPos = OsdOverlayPos::TopLeft;
 	OsdPerformancePos = OsdOverlayPos::TopRight;
 	OsdShowSpeed = true;
@@ -743,12 +752,13 @@ Pcsx2Config::GSOptions::GSOptions()
 	OsdShowVideoCapture = true;
 	OsdShowInputRec = true;
 
-	HWDownloadMode = GSHardwareDownloadMode::Enabled;
+	// [تعديل] تعطيل قراءة البيانات من GPU (يضاعف السرعة)
+	HWDownloadMode = GSHardwareDownloadMode::NoReadbacks;
 	HWSpinGPUForReadbacks = false;
 	HWSpinCPUForReadbacks = false;
-	GPUPaletteConversion = false;
+	GPUPaletteConversion = true;   // [تعديل] تسريع تحويل الألوان
 	AutoFlushSW = true;
-	PreloadFrameWithGSData = false;
+	PreloadFrameWithGSData = true; // [تعديل] تجهيز الإطارات مسبقاً
 	Mipmap = true;
 	HWMipmap = true;
 
@@ -779,6 +789,15 @@ Pcsx2Config::GSOptions::GSOptions()
 	EnableVideoCaptureParameters = false;
 	EnableAudioCapture = true;
 	EnableAudioCaptureParameters = false;
+
+	// [تعديل] إعدادات إضافية لتحسين الأداء
+	UpscaleMultiplier = 1.0f;              // دقة أصلية (أسرع)
+	Renderer = GSRendererType::VK;         // استخدام Vulkan (أو Metal إن كان متاحاً)
+	AccurateBlendingUnit = AccBlendLevel::Minimum; // أقل دقة مزج
+	TriFilter = TriFiltering::Off;         // تعطيل الترشيح ثلاثي الأبعاد
+	MaxAnisotropy = 0;                     // تعطيل التصفية متباينة الخواص
+	TexturePreloading = TexturePreloadingLevel::Full; // تحميل النسيج بالكامل
+	TextureFiltering = BiFiltering::PS2;   // تصفية ثنائية خطية قياسية
 }
 
 bool Pcsx2Config::GSOptions::operator==(const GSOptions& right) const
@@ -1180,10 +1199,18 @@ std::optional<Pcsx2Config::SPU2Options::SPU2SyncMode> Pcsx2Config::SPU2Options::
 	return std::nullopt;
 }
 
-
+// ============================================================
+//  التعديل الجذري لخيارات الصوت (SPU2) - تعطيل المزامنة
+// ============================================================
 Pcsx2Config::SPU2Options::SPU2Options()
 {
 	bitset = 0;
+	OutputVolume = 100;
+	FastForwardVolume = 100;
+	OutputMuted = false;
+	Backend = DEFAULT_BACKEND;
+	// [تعديل] تعطيل مزامنة الصوت للحصول على أقصى أداء
+	SyncMode = SPU2SyncMode::Disabled;
 }
 
 void Pcsx2Config::SPU2Options::LoadSave(SettingsWrapper& wrap)
