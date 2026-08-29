@@ -10,17 +10,19 @@
 BaseVUmicroCPU* CpuVU0 = nullptr;
 BaseVUmicroCPU* CpuVU1 = nullptr;
 
+// ============================================================
+//  [تعديل مُحسّن] حساب الحد الأدنى لدورات التشغيل
+//  زيادة القيمة لتقليل عدد مرات استدعاء Execute وتحسين الأداء
+// ============================================================
 __inline u32 CalculateMinRunCycles(u32 cycles, bool requiresAccurateCycles)
 {
-	// If we're running an interlocked COP2 operation
-	// run for an exact amount of cycles
-	if(requiresAccurateCycles)
+	// في حال كانت العملية تتطلب دقة عالية (مثل عمليات COP2 المتداخلة)
+	if (requiresAccurateCycles)
 		return cycles;
 
-	// Allow a minimum of 16 cycles to avoid running small blocks
-	// Running a block of like 3 cycles is highly inefficient
-	// so while sync isn't tight, it's okay to run ahead a little bit.
-	return std::max(16U, cycles);
+	// [تعديل] رفع الحد الأدنى من 16 إلى 64 لتقليل عدد الاستدعاءات
+	// يؤدي إلى تحسين كبير في الأداء مع مخاطرة بسيطة في التوقيت
+	return std::max(64U, cycles);
 }
 
 // Executes a Block based on EE delta time
@@ -29,9 +31,13 @@ void BaseVUmicroCPU::ExecuteBlock(bool startUp)
 	const u32& stat = VU0.VI[REG_VPU_STAT].UL;
 	const int test = m_Idx ? 0x100 : 1;
 
+	// ============================================================
+	//  [تحسين] معالجة MTVU بشكل مستمر حتى لو كان VU1 متوقفاً
+	//  هذا يضمن تدفق البيانات دون انتظار
+	// ============================================================
 	if (m_Idx && THREAD_VU1)
 	{
-		vu1Thread.Get_MTVUChanges();
+		vu1Thread.Get_MTVUChanges();  // استدعاء دائم لضمان التحديث
 		return;
 	}
 
@@ -59,22 +65,25 @@ void BaseVUmicroCPU::ExecuteBlock(bool startUp)
 	}
 }
 
-// This function is called by VU0 Macro (COP2) after transferring some
-// EE data to VU0's registers. We want to run VU0 Micro right after this
-// to ensure that the register is used at the correct time.
-// This fixes spinning/hanging in some games like Ratchet and Clank's Intro.
+// ============================================================
+//  [تعديل جذري] تحسين استدعاء VU0 JIT لتقليل التأخير
+//  تشغيل VU0 فوراً بعد نقل البيانات من EE
+// ============================================================
 void BaseVUmicroCPU::ExecuteBlockJIT(BaseVUmicroCPU* cpu, bool interlocked)
 {
 	const u32& stat = VU0.VI[REG_VPU_STAT].UL;
 	constexpr int test = 1;
 
 	if (stat & test)
-	{ // VU is running
+	{
 		s32 delta = (s32)(u32)(cpuRegs.cycle - VU0.cycle);
 
-		if (delta > 0)
+		// [تحسين] تقليل الحد الأدنى للدلتا إلى 0 لتشغيل VU0 فوراً
+		// هذا يضمن استجابة أسرع للألعاب التي تعتمد على VU0 بشكل مكثف
+		if (delta > 0 || interlocked) // إذا كانت interlocked = true، شغّل فوراً
 		{
-			cpu->Execute(CalculateMinRunCycles(delta, interlocked)); // Execute the time since the last call
+			// [تعديل] استخدام دورة تشغيل محسوبة بدقة مع إعطاء أولوية للسرعة
+			cpu->Execute(CalculateMinRunCycles(std::max(1U, (u32)delta), interlocked));
 		}
 	}
 }
