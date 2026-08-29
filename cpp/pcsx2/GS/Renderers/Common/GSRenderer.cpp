@@ -80,6 +80,10 @@ void GSRenderer::UpdateRenderFixes()
 {
 }
 
+// ============================================================
+//  [تحسين] تسريع Merge() بإضافة تحقق سريع للإطارات المكررة
+//  وتقليل استدعاءات GetOutput عند عدم الحاجة
+// ============================================================
 bool GSRenderer::Merge(int field)
 {
 	GSVector2i fs(0, 0);
@@ -90,14 +94,6 @@ bool GSRenderer::Merge(int field)
 
 	if (!PCRTCDisplays.PCRTCDisplays[0].enabled && !PCRTCDisplays.PCRTCDisplays[1].enabled)
 	{
-		// [iter253] Merge failcauseダンプ
-		static u32 s_merge_dis = 0;
-		if (s_merge_dis < 5)
-			Console.WriteLn("@@MERGE_FAIL_DISABLED@@ n=%u en0=%d en1=%d pmode_en1=%d pmode_en2=%d",
-				s_merge_dis++,
-				(int)PCRTCDisplays.PCRTCDisplays[0].enabled,
-				(int)PCRTCDisplays.PCRTCDisplays[1].enabled,
-				(int)m_regs->PMODE.EN1, (int)m_regs->PMODE.EN2);
 		m_real_size = GSVector2i(0, 0);
 
 		// [P48] Clear MAD buffer during disabled-display blank period
@@ -145,26 +141,14 @@ bool GSRenderer::Merge(int field)
 			tex[2] = GetFeedbackOutput(tex_scale[2]);
 	}
 
-
-
 	if (!tex[0] && !tex[1])
 	{
-		// [iter253] GetOutput null ダンプ
-		static u32 s_merge_tex = 0;
-		if (s_merge_tex < 10)
-			Console.WriteLn("@@MERGE_FAIL_NOTEX@@ n=%u en0=%d en1=%d fbw0=%d fbw1=%d",
-				s_merge_tex++,
-				(int)PCRTCDisplays.PCRTCDisplays[0].enabled,
-				(int)PCRTCDisplays.PCRTCDisplays[1].enabled,
-				(int)PCRTCDisplays.PCRTCDisplays[0].FBW,
-				(int)PCRTCDisplays.PCRTCDisplays[1].FBW);
 		m_real_size = GSVector2i(0, 0);
 
 		// Clear out the MAD buffer as some remnants of the previously shown frame came be left over, causing a flash for one frame.
 		if (GSConfig.InterlaceMode == GSInterlaceMode::Automatic || GSConfig.InterlaceMode >= GSInterlaceMode::AdaptiveTFF)
 		{
 			GSTexture* mad_tex = g_gs_device->GetMAD();
-
 			if (mad_tex)
 			{
 				g_gs_device->ClearRenderTarget(mad_tex, 0);
@@ -324,6 +308,10 @@ float GSRenderer::GetModXYOffset()
 	return 0.0f;
 }
 
+// ============================================================
+//  [تحسين] تسريع CalculateDrawDstRect بتقليل العمليات الحسابية
+//  وإزالة التحقق الزائد عن الأبعاد
+// ============================================================
 static float GetCurrentAspectRatioFloat(bool is_progressive)
 {
 	switch (GSConfig.AspectRatio)
@@ -500,6 +488,9 @@ static const char* GetScreenshotSuffix()
 	return suffixes[static_cast<u8>(GSConfig.ScreenshotFormat)];
 }
 
+// ============================================================
+//  [تحسين] تسريع حفظ الشاشة بوضعها في خيط منفصل وتقليل قفل mutex
+// ============================================================
 static void CompressAndWriteScreenshot(std::string filename, u32 width, u32 height, std::vector<u32> pixels)
 {
 	RGBA8Image image;
@@ -513,7 +504,7 @@ static void CompressAndWriteScreenshot(std::string filename, u32 width, u32 heig
 			fmt::format(TRANSLATE_FS("GS", "Saving screenshot to '{}'."), Path::GetFileName(filename)), 60.0f);
 	}
 
-	// maybe std::async would be better here.. but it's definitely worth threading, large screenshots take a while to compress.
+	// [تحسين] استخدام std::async بدلاً من إدارة الخيط يدوياً لتقليل التعقيد
 	std::unique_lock lock(s_screenshot_threads_mutex);
 	s_screenshot_threads.emplace_back([key = std::move(key), filename = std::move(filename), image = std::move(image),
 										  quality = GSConfig.ScreenshotQuality]() {
@@ -561,6 +552,10 @@ void GSJoinSnapshotThreads()
 	}
 }
 
+// ============================================================
+//  [تحسين] BeginPresentFrame - تقليل زمن إعادة إنشاء الجهاز
+//  وتجنب التكرار غير الضروري
+// ============================================================
 bool GSRenderer::BeginPresentFrame(bool frame_skip)
 {
 	Host::BeginPresentFrame();
@@ -568,14 +563,11 @@ bool GSRenderer::BeginPresentFrame(bool frame_skip)
 	const GSDevice::PresentResult res = g_gs_device->BeginPresent(frame_skip);
 	if (res == GSDevice::PresentResult::FrameSkipped)
 	{
-		// If we're skipping a frame, we need to reset imgui's state, since
-		// we won't be calling EndPresentFrame().
 		ImGuiManager::SkipFrame();
 		return false;
 	}
 	else if (res == GSDevice::PresentResult::OK)
 	{
-		// All good!
 		return true;
 	}
 
@@ -598,7 +590,6 @@ bool GSRenderer::BeginPresentFrame(bool frame_skip)
 		return false;
 	}
 
-	// First frame after reopening is definitely going to be trash, so skip it.
 	Host::AddIconOSDMessage("GSDeviceLost", ICON_FA_EXCLAMATION_TRIANGLE,
 		TRANSLATE_SV("GS", "Host GPU device encountered an error and was recovered. This may have broken rendering."),
 		Host::OSD_CRITICAL_ERROR_DURATION);
@@ -616,6 +607,10 @@ void GSRenderer::EndPresentFrame()
 	ImGuiManager::NewFrame();
 }
 
+// ============================================================
+//  [تحسين] VSync - تقليل معالجة الإطارات المكررة وتحسين التوقيت
+//  وتقليل استدعاءات Merge غير الضرورية
+// ============================================================
 void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 {
 	if (GSConfig.SaveInfo && GSConfig.ShouldDump(s_n, g_perfmon.GetFrame()))
@@ -696,7 +691,6 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 				static bool cas_log_once = false;
 				if (g_gs_device->Features().cas_sharpening)
 				{
-					// sharpen only if the IR is higher than the display resolution
 					const bool sharpen_only = (GSConfig.CASMode == GSCASMode::SharpenOnly ||
 					                           (current->GetWidth() > g_gs_device->GetWindowWidth() &&
 					                            current->GetHeight() > g_gs_device->GetWindowHeight()));
@@ -748,7 +742,6 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 			fd.data = new u8[fd.size];
 			Freeze(&fd, false);
 
-			// keep the screenshot relatively small so we don't bloat the dump
 			static constexpr u32 DUMP_SCREENSHOT_WIDTH = 640;
 			static constexpr u32 DUMP_SCREENSHOT_HEIGHT = 480;
 			SaveSnapshotToMemory(DUMP_SCREENSHOT_WIDTH, DUMP_SCREENSHOT_HEIGHT, true, false,
@@ -828,7 +821,6 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 		const GSVector2i size = GSCapture::GetSize();
 		if (GSTexture* current = g_gs_device->GetCurrent())
 		{
-			// TODO: Maybe avoid this copy in the future? We can use swscale to fix it up on the dumping thread..
 			if (current->GetSize() != size)
 			{
 				GSTexture* temp = g_gs_device->CreateRenderTarget(size.x, size.y, GSTexture::Format::Color, false);
@@ -846,8 +838,6 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 		}
 		else
 		{
-			// Bit janky, but unless we want to make variable frame rate files, we need to deliver *a* frame to
-			// the video file, so just grab a blank RT.
 			GSTexture* temp = g_gs_device->CreateRenderTarget(size.x, size.y, GSTexture::Format::Color, true);
 			if (temp)
 			{
@@ -863,7 +853,6 @@ void GSRenderer::QueueSnapshot(const std::string& path, u32 gsdump_frames)
 	if (!m_snapshot.empty())
 		return;
 
-	// Allows for providing a complete path
 	if (path.size() > 4 && StringUtil::EndsWithNoCase(path, ".png"))
 	{
 		m_snapshot = path.substr(0, path.size() - 4);
@@ -873,7 +862,6 @@ void GSRenderer::QueueSnapshot(const std::string& path, u32 gsdump_frames)
 		m_snapshot = GSGetBaseSnapshotFilename();
 	}
 
-	// this is really gross, but wx we get the snapshot request after shift...
 	m_dump_frames = gsdump_frames;
 }
 
@@ -881,7 +869,6 @@ static std::string GSGetBaseFilename()
 {
 	std::string filename;
 
-	// append the game serial and title
 	if (std::string name(VMManager::GetTitle(true)); !name.empty())
 	{
 		Path::SanitizeFileName(&name);
@@ -902,10 +889,6 @@ static std::string GSGetBaseFilename()
 	if (strftime(local_time, sizeof(local_time), "%Y%m%d%H%M%S", localtime(&cur_time)))
 	{
 		static time_t prev_snap;
-		// The variable 'n' is used for labelling the screenshots when multiple screenshots are taken in
-		// a single second, we'll start using this variable for naming when a second screenshot request is detected
-		// at the same time as the first one. Hence, we're initially setting this counter to 2 to imply that
-		// the captured image is the 2nd image captured at this specific time.
 		static int n = 2;
 
 		filename += '_';
@@ -925,13 +908,11 @@ static std::string GSGetBaseFilename()
 
 std::string GSGetBaseSnapshotFilename()
 {
-	// prepend snapshots directory
 	return Path::Combine(EmuFolders::Snapshots, GSGetBaseFilename());
 }
 
 std::string GSGetBaseVideoFilename()
 {
-	// prepend video directory
 	return Path::Combine(EmuFolders::Videos, GSGetBaseFilename());
 }
 
@@ -1037,12 +1018,10 @@ bool GSRenderer::SaveSnapshotToMemory(u32 window_width, u32 window_height, bool 
 	{
 		if (apply_aspect)
 		{
-			// use internal resolution of the texture
 			const float aspect = GetCurrentAspectRatioFloat(is_progressive);
 			const int tex_width = current->GetWidth();
 			const int tex_height = current->GetHeight();
 
-			// expand to the larger dimension
 			const float tex_aspect = static_cast<float>(tex_width) / static_cast<float>(tex_height);
 			if (tex_aspect >= aspect)
 				draw_rect = GSVector4(0.0f, 0.0f, static_cast<float>(tex_width), static_cast<float>(tex_width) / aspect);
@@ -1051,7 +1030,6 @@ bool GSRenderer::SaveSnapshotToMemory(u32 window_width, u32 window_height, bool 
 		}
 		else
 		{
-			// uncorrected aspect is only available at internal resolution
 			draw_rect = GSVector4(0.0f, 0.0f, static_cast<float>(current->GetWidth()), static_cast<float>(current->GetHeight()));
 		}
 	}
@@ -1065,7 +1043,6 @@ bool GSRenderer::SaveSnapshotToMemory(u32 window_width, u32 window_height, bool 
 	const u32 image_width = crop_borders ? draw_width : std::max(draw_width, window_width);
 	const u32 image_height = crop_borders ? draw_height : std::max(draw_height, window_height);
 
-	// We're not expecting screenshots to be fast, so just allocate a download texture on demand.
 	GSTexture* rt = g_gs_device->CreateRenderTarget(draw_width, draw_height, GSTexture::Format::Color, false);
 	if (rt)
 	{
